@@ -52,11 +52,10 @@ class LOMOTrainer:
                 "Detected DeepSpeed is not installed. See https://github.com/microsoft/DeepSpeed")
 
         # Initialize deepspeed engine
-        engine, _, _, _ = deepspeed.initialize(
+        self.model, _, _, _ = deepspeed.initialize(
             config=training_args.deepspeed,
             model=model,
         )
-        self.model=engine
         # get train_dataloader and eval_dataloader
         if isinstance(data_collator, dict):
             assert 'train' in data_collator and 'eval' in data_collator, "data_collator should be a dict with keys 'train' and 'eval'."
@@ -94,8 +93,7 @@ class LOMOTrainer:
                                                   n_steps=self.n_steps)
         self.lr = 0
 
-        self.optimizer = LOMO(model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
-        self.optimizer.engine = engine
+        self.optimizer = LOMO(self.model,model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
         get_accelerator().empty_cache()
 
     def train(self):

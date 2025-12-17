@@ -1,0 +1,68 @@
+# Configuration for Continued Pretraining with LOMO
+
+# Model
+model_name_or_path: 'huggyllama/llama-7b'  # Base model to continue training
+
+# Data
+dataset_name: 'wikipedia_ja'  # Dataset name (run: python src/dataset_manager.py --list to see available)
+refresh: false  # Set to true to reprocess data (set to false after first run)
+data_tag: 'continued_pretraining'
+train_on_inputs: true  # For continued pretraining, always true (train on entire text)
+data_max_length: 2048  # Sequence length - adjust based on your GPU memory
+data_dir: 'data'  # Directory where your data files are stored
+
+# Training
+tag: 'lomo_continued_pretraining'
+output_dir: 'outputs'
+overwrite_output_dir: true
+deepspeed: 'config/ds_config.json'
+do_train: true
+do_eval: true
+evaluation_strategy: 'steps'  # Changed to 'steps' for more frequent eval
+eval_steps: 500  # Evaluate every 500 steps
+logging_steps: 100  # Log every 100 steps
+
+# Batch size settings (adjust based on your GPU memory)
+per_device_train_batch_size: 4  # Smaller batch size for longer sequences
+per_device_eval_batch_size: 4
+gradient_accumulation_steps: 4  # Effective batch size = 4 * 4 = 16
+
+# Learning rate (continued pretraining typically uses lower lr than fine-tuning)
+learning_rate: 1e-5  # Much lower than fine-tuning (usually 1e-5 to 5e-5)
+weight_decay: 0.01  # Small weight decay for regularization
+num_train_epochs: 3  # Fewer epochs for continued pretraining
+lr_scheduler_type: 'cosine'  # Cosine scheduler often works well
+warmup_steps: 100  # Warmup steps instead of ratio
+adam_beta1: 0.9
+adam_beta2: 0.95  # Common for continued pretraining
+adam_epsilon: 1e-8
+
+# Gradient clipping
+clip_grad_norm: 1.0
+
+# Checkpointing
+save_strategy: 'steps'
+save_steps: 1000  # Save checkpoint every 1000 steps
+save_total_limit: 3  # Keep only 3 most recent checkpoints
+load_best_model_at_end: false  # Not applicable for continued pretraining
+
+# Other settings
+seed: 42
+remove_unused_columns: false
+dataloader_pin_memory: false
+gradient_checkpointing: true  # Essential for memory efficiency
+predict_with_generate: false
+group_by_length: true  # Group sequences by length for efficiency
+
+# Logging
+report_to: 'wandb'  # Use wandb for experiment tracking
+logging_dir: 'logs'
+logging_first_step: true
+
+# Mixed precision
+bf16: false  # Use fp16 instead of bf16 if your GPU doesn't support bf16
+fp16: true
+dataloader_num_workers: 4
+
+# Resume from checkpoint (uncomment to resume training)
+# resume_from_checkpoint: 'outputs/wikipedia_ja_llama-7b_lomo_continued_pretraining/continued_pretraining_lr1e-05_bs4_cosine_warmup100_clipnorm1.0/checkpoint-1000'

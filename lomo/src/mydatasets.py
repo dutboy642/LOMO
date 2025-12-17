@@ -309,7 +309,7 @@ if __name__ == '__main__':
 
     parser = HfArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
-    model_args.model_name_or_path = '/home/klv/llama_hf/7B'
+    model_args.model_name_or_path = 'huggyllama/llama-7b'
     data_args.dataset_name = 'record'
     data_args.refresh = True
     data_args.data_tag = 'debug'

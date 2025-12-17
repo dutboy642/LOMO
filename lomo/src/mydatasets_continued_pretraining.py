@@ -154,7 +154,7 @@ def get_continued_pretraining_dataset_info(dataset_name):
             path="data/wikipedia_ja.json",
             exemplar_split="train",
             eval_split="validation",
-            sample_size=-1,
+            sample_size=10000,
             text_column='text'
         )
     elif dataset_name == 'wikipedia_vi':

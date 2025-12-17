@@ -84,8 +84,12 @@ class LOMOTrainer:
         print(f"DEBUG: warmup = {self.training_args.warmup}, type = {type(self.training_args.warmup)}")
         print(f"DEBUG: lr_scheduler_type = {self.training_args.lr_scheduler_type}, type = {type(self.training_args.lr_scheduler_type)}")
         
-        self.lr_scheduler = LearningRateScheduler(learning_rate=self.training_args.learning_rate,
-                                                  warmup=self.training_args.warmup,
+        # Convert to proper types to avoid string multiplication error
+        learning_rate = float(self.training_args.learning_rate)
+        warmup = float(self.training_args.warmup)
+        
+        self.lr_scheduler = LearningRateScheduler(learning_rate=learning_rate,
+                                                  warmup=warmup,
                                                   schedule=self.training_args.lr_scheduler_type,
                                                   n_steps=self.n_steps)
         self.lr = 0

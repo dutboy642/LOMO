@@ -10,6 +10,7 @@ data_tag: 'continued_pretraining'
 train_on_inputs: true  # For continued pretraining, always true (train on entire text)
 data_max_length: 2048  # Sequence length - adjust based on your GPU memory
 data_dir: 'data'  # Directory where your data files are stored
+sample_size: 10000  # Number of samples to use (-1 for all data, set to smaller number for testing)
 
 # Training
 tag: 'lomo_continued_pretraining'

@@ -22,6 +22,7 @@ class DataArguments:
     data_max_length: int = field(default=1024)
     few_shot_size: int = field(default=-1)
     in_context_learning: bool = field(default=False, metadata={"help": "Whether to use in-context learning."})
+    sample_size: int = field(default=-1, metadata={"help": "Number of samples to use from dataset. -1 means use all data."})
 
 
 @dataclass

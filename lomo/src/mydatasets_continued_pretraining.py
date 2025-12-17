@@ -35,7 +35,15 @@ class ContinuedPretrainingDataset(Dataset):
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.split = split
-        self.sample_size = dataset_info.sample_size
+        
+        # Use sample_size from data_args if specified, otherwise use dataset_info
+        if hasattr(data_args, 'sample_size') and data_args.sample_size != -1:
+            self.sample_size = data_args.sample_size
+            print(f"🎯 Using sample_size from config: {self.sample_size}")
+        else:
+            self.sample_size = dataset_info.sample_size
+            print(f"📊 Using default sample_size: {self.sample_size}")
+            
         self.text_column = dataset_info.text_column
 
         save_dir = os.path.join(data_args.data_dir, data_args.dataset_name, data_args.data_tag)
@@ -70,7 +78,23 @@ class ContinuedPretrainingDataset(Dataset):
         """Process raw text data for continued pretraining"""
         data = []
         
-        for instance in tqdm(dataset):
+        # Sample dataset early if sample_size is specified
+        if self.sample_size > 0 and len(dataset) > self.sample_size:
+            print(f'🎯 Sampling {self.sample_size} examples from {len(dataset)} total examples')
+            random.seed(REPRODUCIBILITY_SEED)
+            # Convert to list if it's not already, then sample
+            if hasattr(dataset, 'select'):
+                # For HuggingFace datasets
+                indices = random.sample(range(len(dataset)), self.sample_size)
+                dataset = dataset.select(indices)
+            else:
+                # For list datasets
+                dataset = random.sample(list(dataset), self.sample_size)
+            print(f'✅ Sampled dataset size: {len(dataset)}')
+        else:
+            print(f'📊 Processing full dataset with {len(dataset)} examples')
+        
+        for instance in tqdm(dataset, desc="Processing dataset"):
             if isinstance(instance, dict):
                 text = instance[self.text_column]
             else:
@@ -105,12 +129,7 @@ class ContinuedPretrainingDataset(Dataset):
                 'text': text.strip()
             })
 
-        # Sample data if needed
-        if self.sample_size > 0 and len(data) > self.sample_size:
-            random.seed(REPRODUCIBILITY_SEED)
-            data = random.sample(data, self.sample_size)
-            print(f'Sampled {self.sample_size} examples from the dataset.')
-
+        print(f'✅ Processed {len(data)} examples successfully')
         torch.save(data, save_file)
         print('Saving data to', save_file)
         return data

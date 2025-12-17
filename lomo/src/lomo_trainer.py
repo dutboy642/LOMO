@@ -78,6 +78,12 @@ class LOMOTrainer:
         self.num_steps_per_epoch = len(self.train_dataloader)
         self.global_step = 1
         self.n_steps = self.num_steps_per_epoch * self.training_args.num_train_epochs
+        
+        # Debug learning rate
+        print(f"DEBUG: learning_rate = {self.training_args.learning_rate}, type = {type(self.training_args.learning_rate)}")
+        print(f"DEBUG: warmup = {self.training_args.warmup}, type = {type(self.training_args.warmup)}")
+        print(f"DEBUG: lr_scheduler_type = {self.training_args.lr_scheduler_type}, type = {type(self.training_args.lr_scheduler_type)}")
+        
         self.lr_scheduler = LearningRateScheduler(learning_rate=self.training_args.learning_rate,
                                                   warmup=self.training_args.warmup,
                                                   schedule=self.training_args.lr_scheduler_type,

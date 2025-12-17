@@ -220,6 +220,10 @@ class LearningRateScheduler:
                  learning_rate: float,
                  n_steps: int = 0):
 
+        print(f"DEBUG LearningRateScheduler: learning_rate = {learning_rate}, type = {type(learning_rate)}")
+        print(f"DEBUG LearningRateScheduler: warmup = {warmup}, type = {type(warmup)}")
+        print(f"DEBUG LearningRateScheduler: schedule = {schedule}, type = {type(schedule)}")
+        
         self.warmup = max(warmup, 0.)
         self.schedule = schedule
         self.initial_lr = learning_rate

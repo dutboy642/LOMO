@@ -175,11 +175,22 @@ class LOMO(Optimizer):
     #     self.grad_func(0)
     def fused_backward(self, loss, lr):
         self.lr = lr
+
+        if self.clip_grad_norm is not None and self.clip_grad_norm > 0 and self.clip_coef is None:
+            raise ValueError(
+                "clip_grad_norm is not None, but clip_coef is None. "
+                "Please call optimizer.grad_norm() before optimizer.fused_backward()."
+            )
+
         if self.loss_scaler:
             loss = loss * self.loss_scaler.loss_scale
 
+        # backward thật – CHỈ 1 LẦN
         self.engine.backward(loss)
+
+        # update
         self.engine.step()
+
 
 
     # def grad_norm(self, loss):
@@ -217,6 +228,7 @@ class LOMO(Optimizer):
     #     self.gather_norm = False
     def grad_norm(self, loss):
         if self.loss_scaler:
+            self.loss_scaler.has_overflow_serial = False
             loss = loss * self.loss_scaler.loss_scale
 
         grads = torch.autograd.grad(
@@ -226,10 +238,16 @@ class LOMO(Optimizer):
             allow_unused=True
         )
 
-        norms = [g.norm(2) for g in grads if g is not None]
-        total_norm = torch.norm(torch.stack(norms), 2)
+        with torch.no_grad():
+            norms = []
+            for g in grads:
+                if g is not None:
+                    norms.append(g.norm(2))
 
-        self.clip_coef = torch.clamp(
-            self.clip_grad_norm / (total_norm + 1e-6),
-            max=1.0
-        )
+            if len(norms) == 0:
+                self.clip_coef = 1.0
+                return
+
+            total_norm = torch.norm(torch.stack(norms), 2.0)
+            self.clip_coef = float(self.clip_grad_norm) / (total_norm + 1e-6)
+            self.clip_coef = torch.clamp(self.clip_coef, max=1.0)

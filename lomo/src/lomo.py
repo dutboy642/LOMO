@@ -153,57 +153,83 @@ class LOMO(Optimizer):
 
         return func
 
+    # def fused_backward(self, loss, lr):
+    #     """
+    #     执行一步反向传播并更新模型的梯度。
+
+    #     :param loss: 模型的loss值
+    #     :param lr: 学习率
+    #     """
+    #     self.lr = lr
+    #     # Users need call grad_norm themselves and then call backward_step
+    #     if self.clip_grad_norm is not None and self.clip_grad_norm > 0 and self.clip_coef is None:
+    #         raise ValueError(
+    #             "clip_grad_norm is not None, but clip_coef is None. "
+    #             "Please call optimizer.grad_norm() before optimizer.fused_backward()."
+    #         )
+    #     if self.loss_scaler:
+    #         loss = loss * self.loss_scaler.loss_scale
+    #     loss.backward()
+    #     # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
+    #     # the argument of grad_func is just a placeholder, and it can be anything. 
+    #     self.grad_func(0)
     def fused_backward(self, loss, lr):
-        """
-        执行一步反向传播并更新模型的梯度。
-
-        :param loss: 模型的loss值
-        :param lr: 学习率
-        """
         self.lr = lr
-        # Users need call grad_norm themselves and then call backward_step
-        if self.clip_grad_norm is not None and self.clip_grad_norm > 0 and self.clip_coef is None:
-            raise ValueError(
-                "clip_grad_norm is not None, but clip_coef is None. "
-                "Please call optimizer.grad_norm() before optimizer.fused_backward()."
-            )
         if self.loss_scaler:
             loss = loss * self.loss_scaler.loss_scale
-        loss.backward()
-        # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
-        # the argument of grad_func is just a placeholder, and it can be anything. 
-        self.grad_func(0)
 
+        self.engine.backward(loss)
+        self.engine.step()
+
+
+    # def grad_norm(self, loss):
+    #     """
+    #     计算梯度的范数。
+
+    #     :param loss: 模型的loss值
+    #     """
+    #     self.gather_norm = True
+    #     self.grad_norms = []
+    #     if self.loss_scaler:
+    #         self.loss_scaler.has_overflow_serial = False
+    #         loss = loss * self.loss_scaler.loss_scale
+    #     loss.backward(retain_graph=True)
+    #     # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
+    #     # the argument of grad_func is just a placeholder, and it can be anything. 
+    #     self.grad_func(0)
+
+    #     if self.loss_scaler and self.loss_scaler.has_overflow_serial:
+    #         self.loss_scaler.update_scale(overflow=True)
+    #         with torch.no_grad():  # clear gradients
+    #             for n, p in self.model.named_parameters():
+    #                 p.grad = None
+    #         return
+
+
+    #     with torch.no_grad():
+    #         # The norm is computed over all gradients together, as if they were
+    #         # concatenated into a single vector. Gradients are modified in-place.
+    #         self.grad_norms = torch.stack(self.grad_norms)
+
+    #         total_norm = torch.norm(self.grad_norms, 2.0)
+    #         self.clip_coef = float(self.clip_grad_norm) / (total_norm + 1e-6)
+    #         self.clip_coef = torch.clamp(self.clip_coef, max=1.0)
+    #     self.gather_norm = False
     def grad_norm(self, loss):
-        """
-        计算梯度的范数。
-
-        :param loss: 模型的loss值
-        """
-        self.gather_norm = True
-        self.grad_norms = []
         if self.loss_scaler:
-            self.loss_scaler.has_overflow_serial = False
             loss = loss * self.loss_scaler.loss_scale
-        loss.backward(retain_graph=True)
-        # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
-        # the argument of grad_func is just a placeholder, and it can be anything. 
-        self.grad_func(0)
 
-        if self.loss_scaler and self.loss_scaler.has_overflow_serial:
-            self.loss_scaler.update_scale(overflow=True)
-            with torch.no_grad():  # clear gradients
-                for n, p in self.model.named_parameters():
-                    p.grad = None
-            return
+        grads = torch.autograd.grad(
+            loss,
+            self.model.parameters(),
+            retain_graph=True,
+            allow_unused=True
+        )
 
+        norms = [g.norm(2) for g in grads if g is not None]
+        total_norm = torch.norm(torch.stack(norms), 2)
 
-        with torch.no_grad():
-            # The norm is computed over all gradients together, as if they were
-            # concatenated into a single vector. Gradients are modified in-place.
-            self.grad_norms = torch.stack(self.grad_norms)
-
-            total_norm = torch.norm(self.grad_norms, 2.0)
-            self.clip_coef = float(self.clip_grad_norm) / (total_norm + 1e-6)
-            self.clip_coef = torch.clamp(self.clip_coef, max=1.0)
-        self.gather_norm = False
+        self.clip_coef = torch.clamp(
+            self.clip_grad_norm / (total_norm + 1e-6),
+            max=1.0
+        )

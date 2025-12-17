@@ -1,5 +1,5 @@
 # model
-model_name_or_path: '/remote-home/share/llama_hf/7B'
+model_name_or_path: 'huggyllama/llama-7b'
 # data
 dataset_name: 'wic'
 refresh: false

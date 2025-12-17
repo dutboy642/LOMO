@@ -2,6 +2,20 @@
 
 set -x
 
+# Set default GPU if not specified
+if [ -z "$CUDA_VISIBLE_DEVICES" ]; then
+    export CUDA_VISIBLE_DEVICES="0"
+    echo "⚠️  CUDA_VISIBLE_DEVICES not set, defaulting to GPU 0"
+fi
+
+# Validate CUDA_VISIBLE_DEVICES format
+if [[ ! "$CUDA_VISIBLE_DEVICES" =~ ^[0-9]+(,[0-9]+)*$ ]]; then
+    echo "❌ Invalid CUDA_VISIBLE_DEVICES format: $CUDA_VISIBLE_DEVICES"
+    echo "   Expected format: 0 or 0,1 or 0,1,2,3"
+    export CUDA_VISIBLE_DEVICES="0"
+    echo "   Using default: GPU 0"
+fi
+
 # Generate random port for DeepSpeed
 port=$(shuf -i25000-30000 -n1)
 
@@ -92,12 +106,38 @@ if [ -f "src/dataset_manager.py" ]; then
 fi
 
 # Run continued pretraining
-deepspeed --master_port "$port" \
-    --include localhost:$CUDA_VISIBLE_DEVICES \
-    src/train_lomo_continued_pretraining.py \
-    config/args_continued_pretraining.yaml
+echo "🚀 Starting DeepSpeed training..."
+echo "Command: deepspeed --master_port $port --include localhost:$CUDA_VISIBLE_DEVICES src/train_lomo_continued_pretraining.py config/args_continued_pretraining.yaml"
+echo ""
 
-echo "==================================="
-echo "Continued pretraining completed!"
-echo "Check outputs/ directory for results"
-echo "===================================="
+# Check number of GPUs and adjust include parameter
+IFS=',' read -ra GPU_ARRAY <<< "$CUDA_VISIBLE_DEVICES"
+GPU_COUNT=${#GPU_ARRAY[@]}
+
+if [ $GPU_COUNT -eq 1 ]; then
+    # Single GPU training
+    deepspeed --master_port "$port" \
+        --include localhost:${CUDA_VISIBLE_DEVICES} \
+        src/train_lomo_continued_pretraining.py \
+        config/args_continued_pretraining.yaml
+else
+    # Multi-GPU training
+    deepspeed --master_port "$port" \
+        --include localhost:${CUDA_VISIBLE_DEVICES} \
+        src/train_lomo_continued_pretraining.py \
+        config/args_continued_pretraining.yaml
+fi
+
+exit_code=$?
+if [ $exit_code -eq 0 ]; then
+    echo "==================================="
+    echo "✅ Continued pretraining completed successfully!"
+    echo "📁 Check outputs/ directory for results"
+    echo "==================================="
+else
+    echo "==================================="
+    echo "❌ Training failed with exit code: $exit_code"
+    echo "📝 Check logs above for error details"
+    echo "==================================="
+    exit $exit_code
+fi

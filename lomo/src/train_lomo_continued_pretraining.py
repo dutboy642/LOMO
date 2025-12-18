@@ -7,7 +7,7 @@ from transformers import HfArgumentParser
 from transformers import AutoModelForCausalLM, AutoTokenizer, AutoConfig
 from transformers import set_seed
 from dataclasses import asdict
-from transformers.deepspeed import HfDeepSpeedConfig
+from transformers.integrations.deepspeed import HfDeepSpeedConfig
 import wandb
 
 python_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))

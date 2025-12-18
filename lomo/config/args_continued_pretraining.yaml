@@ -4,7 +4,7 @@
 model_name_or_path: 'huggyllama/llama-7b'  # Base model to continue training
 
 # Data
-dataset_name: 'wikipedia_ja'  # Dataset name (run: python src/dataset_manager.py --list to see available)
+dataset_name: 'wikipedia_ja_100_samples'  # Dataset name (run: python src/dataset_manager.py --list to see available)
 refresh: false  # Set to true to reprocess data (set to false after first run)
 data_tag: 'continued_pretraining'
 train_on_inputs: true  # For continued pretraining, always true (train on entire text)

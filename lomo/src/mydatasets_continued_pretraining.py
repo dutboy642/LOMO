@@ -54,12 +54,14 @@ class ContinuedPretrainingDataset(Dataset):
         if data_args.refresh or not os.path.exists(save_file):
             if dataset_info.path.endswith('.jsonl') or dataset_info.path.endswith('.json'):
                 # Load from local JSON/JSONL file
-                dataset = load_dataset('json', data_files=dataset_info.path, split='train')
+                full_dataset = load_dataset('json', data_files=dataset_info.path, split='train')
+                dataset = self._split_local_dataset(full_dataset, split)
             elif dataset_info.path.endswith('.txt'):
                 # Load from text file
                 with open(dataset_info.path, 'r', encoding='utf-8') as f:
                     texts = f.read().strip().split('\n\n')  # Split by double newline
-                dataset = [{'text': text.strip()} for text in texts if text.strip()]
+                full_dataset = [{'text': text.strip()} for text in texts if text.strip()]
+                dataset = self._split_local_dataset(full_dataset, split)
             else:
                 # Load from HuggingFace datasets
                 dataset = load_dataset(dataset_info.path, name=dataset_info.name, split=split)
@@ -73,6 +75,48 @@ class ContinuedPretrainingDataset(Dataset):
         print('Data format:', self.data[0].keys() if self.data else "Empty dataset")
         if self.data:
             print('Max length:', max([len(d['input_ids']) for d in self.data]))
+
+    def _split_local_dataset(self, full_dataset, split, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
+        """Chia local dataset thành train/validation/test splits"""
+        if isinstance(full_dataset, list):
+            total_size = len(full_dataset)
+        else:
+            total_size = len(full_dataset)
+            
+        # Tính toán size cho mỗi split
+        train_size = int(total_size * train_ratio)
+        val_size = int(total_size * val_ratio)
+        
+        # Shuffle data với seed cố định
+        random.seed(REPRODUCIBILITY_SEED)
+        indices = list(range(total_size))
+        random.shuffle(indices)
+        
+        # Chia indices
+        train_indices = indices[:train_size]
+        val_indices = indices[train_size:train_size + val_size]
+        test_indices = indices[train_size + val_size:]
+        
+        print(f"📊 Split sizes - Train: {len(train_indices)}, Val: {len(val_indices)}, Test: {len(test_indices)}")
+        
+        # Trả về data theo split được yêu cầu
+        if split == 'train':
+            if isinstance(full_dataset, list):
+                return [full_dataset[i] for i in train_indices]
+            else:
+                return full_dataset.select(train_indices)
+        elif split == 'validation':
+            if isinstance(full_dataset, list):
+                return [full_dataset[i] for i in val_indices]
+            else:
+                return full_dataset.select(val_indices)
+        elif split == 'test':
+            if isinstance(full_dataset, list):
+                return [full_dataset[i] for i in test_indices]
+            else:
+                return full_dataset.select(test_indices)
+        else:
+            raise ValueError(f"Unknown split: {split}")
 
     def process_continued_pretraining(self, dataset, save_file):
         """Process raw text data for continued pretraining"""
@@ -174,6 +218,14 @@ def get_continued_pretraining_dataset_info(dataset_name):
             exemplar_split="train",
             eval_split="validation",
             sample_size=10000,
+            text_column='text'
+        )
+    elif dataset_name == 'wikipedia_ja_100_samples':
+        return DatasetInfo(
+            path="data/wikipedia_ja_100_samples.json",
+            exemplar_split="train",
+            eval_split="validation",
+            sample_size=100,
             text_column='text'
         )
     elif dataset_name == 'wikipedia_vi':

@@ -21,6 +21,7 @@ class DatasetManager:
         """Check if dataset exists and return info"""
         dataset_map = {
             'wikipedia_ja': 'wikipedia_ja.json',
+            'wikipedia_ja_100_samples': 'wikipedia_ja_100_samples.json',
             'wikipedia_vi': 'wikipedia_vi.json', 
             'wikipedia_en': 'wikipedia_en.json',
             'custom_text': 'custom_text.txt',
@@ -159,7 +160,7 @@ Performance sẽ tốt hơn đáng kể trên task domain đó."""
     def list_datasets(self) -> List[Dict]:
         """List all available datasets with their status"""
         datasets = [
-            'wikipedia_ja', 'wikipedia_vi', 'wikipedia_en',
+            'wikipedia_ja','wikipedia_ja_100_samples','wikipedia_ja', 'wikipedia_vi', 'wikipedia_en',
             'custom_text', 'custom_jsonl', 'vietnamese_corpus'
         ]
         

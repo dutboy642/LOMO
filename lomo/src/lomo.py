@@ -23,8 +23,7 @@ class LOMO(Optimizer):
     :param clip_grad_value: 梯度裁剪的值域阈值
     """
 
-    def __init__(self, ds_model, model, lr=1e-3, clip_grad_norm=None, clip_grad_value=None):
-        self.ds_model= ds_model
+    def __init__(self, model, lr=1e-3, clip_grad_norm=None, clip_grad_value=None):
         self.model = model
         self.lr = lr
         self.local_rank = int(os.environ["LOCAL_RANK"])
@@ -191,7 +190,7 @@ class LOMO(Optimizer):
         if self.loss_scaler:
             loss = loss * self.loss_scaler.loss_scale
         # Use engine.backward() instead of tensor.backward() for DeepSpeed compatibility
-        self.ds_model.backward(loss)
+        loss.backward(loss)
         # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
         # the argument of grad_func is just a placeholder, and it can be anything. 
         self.grad_func(0)
@@ -276,7 +275,7 @@ class LOMO(Optimizer):
             self.loss_scaler.has_overflow_serial = False
             loss = loss * self.loss_scaler.loss_scale
         # Use engine.backward() instead of tensor.backward() for DeepSpeed compatibility
-        self.ds_model.backward(loss, retain_graph=True)
+        loss.backward(loss, retain_graph=True)
         # update the last parameter since the last parameter in the computaiton graph is not ready when calling hook functions
         # the argument of grad_func is just a placeholder, and it can be anything. 
         self.grad_func(0)

@@ -38,7 +38,7 @@ class MyTrainingArguments(Seq2SeqTrainingArguments):
                                    metadata={"help": "Maximum loss value (for token loss clipping)."})  # recommend 5.0
     warmup: float = field(default=0.0,
                           metadata={"help": "The number of warmup steps (int) or the warmup ratio (float)."})
-
+    evaluation_strategy: str = field(default='epoch', metadata={})
     max_length: int = field(default=20, metadata={"help": "The maximum length of the sequence to be generated."})
     max_new_tokens: int = field(default=None, metadata={
         "help": "The maximum numbers of tokens to generate, ignoring the number of tokens in the prompt."})

@@ -19,7 +19,7 @@ per_device_train_batch_size: 16
 per_device_eval_batch_size: 16
 learning_rate: 0.03
 weight_decay: 0
-num_train_epochs: 10
+num_train_epochs: 1
 lr_scheduler_type: 'linear'
 warmup: 0.1
 clip_grad_norm: 1.0
@@ -34,7 +34,7 @@ remove_unused_columns: false
 load_best_model_at_end: false
 metric_for_best_model: 'acc'
 group_by_length: false
-#report_to: 'wandb'
+# report_to: 'wandb'
 dataloader_pin_memory: false
 gradient_checkpointing: true
 predict_with_generate: false

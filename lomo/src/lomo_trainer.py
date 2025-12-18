@@ -16,7 +16,6 @@ from transformers import GenerationConfig
 
 try:
     import deepspeed
-    from deepspeed import comm as dist
     from deepspeed.accelerator import get_accelerator
 except:
     pass
@@ -93,7 +92,7 @@ class LOMOTrainer:
                                                   n_steps=self.n_steps)
         self.lr = 0
 
-        self.optimizer = LOMO(self.model,model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
+        self.optimizer = LOMO(model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
         get_accelerator().empty_cache()
 
     def train(self):

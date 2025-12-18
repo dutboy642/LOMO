@@ -14,7 +14,7 @@ python_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.append(python_path)
 from log import print
 from arguments import ModelArguments, DataArguments, MyTrainingArguments
-from mydatasets_continued_pretraining import ContinuedPretrainingDataset, get_continued_pretraining_dataset_info
+from mydatasets_continued_pretraining import ContinuedPretrainingDataset
 from lomo_trainer import LOMOTrainer
 from utils import DataCollatorForCauselLM
 
@@ -56,7 +56,15 @@ def train_continued_pretraining():
     if training_args.clip_loss_value and training_args.clip_loss_value > 0:
         hparam_name += '_cliploss' + str(training_args.clip_loss_value)
     
-    training_args.output_dir = os.path.join('outputs', tag_name, hparam_name)
+    # training_args.output_dir = os.path.join('outputs', tag_name, hparam_name)
+    base_output_dir = training_args.output_dir if training_args.output_dir else 'outputs'
+    experiment_path = os.path.join(tag_name, hparam_name)
+    training_args.output_dir = os.path.join(base_output_dir, experiment_path)
+    
+    print(f"📁 Output directory: {training_args.output_dir}")
+    
+    # Ensure output directory exists
+    os.makedirs(training_args.output_dir, exist_ok=True)
 
     if training_args.tag == 'debug':
         os.environ['WANDB_MODE'] = 'offline'
@@ -95,13 +103,16 @@ def train_continued_pretraining():
         tokenizer.pad_token_id = tokenizer.eos_token_id
 
     # ========== 3. Preprocessing the datasets. ==========
-    dataset_info = get_continued_pretraining_dataset_info(data_args.dataset_name)
-    train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, dataset_info, split=dataset_info.exemplar_split)
+    # Validate dataset configuration
+    if not data_args.dataset_path:
+        raise ValueError("dataset_path is required in data_args")
+    
+    train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='train')
     
     eval_dataset = None
     if training_args.do_eval:
         try:
-            eval_dataset = ContinuedPretrainingDataset(data_args, tokenizer, dataset_info, split=dataset_info.eval_split)
+            eval_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='validation')
         except:
             print("No evaluation split found, using training split for evaluation")
             eval_dataset = train_dataset

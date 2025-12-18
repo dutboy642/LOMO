@@ -14,6 +14,8 @@ class ModelArguments:
 class DataArguments:
     data_dir: str = field(default='data')
     dataset_name: str = field(default='openbookqa')
+    dataset_path: Optional[str] = field(default=None, metadata={"help": "Path to dataset (local file or HuggingFace repo)"})
+    text_column: str = field(default="text", metadata={"help": "Column name containing text data"})
     refresh: bool = field(default=False, metadata={"help": "Whether to refresh the data."})
 
     data_tag: str = field(default='src')

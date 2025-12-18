@@ -18,18 +18,20 @@ image = (
     .apt_install("git")
     .uv_pip_install(
         "transformers",
+        # "transformers==4.41.2",
         "torch",
         "tensorboard",
         "tqdm",
         # "deepspeed",
         "rich>=13.3.5",
         "accelerate>=0.20.3",
-        "datasets",
+        "datasets==2.6.1",
         "huggingface_hub",
         "peft",
         "wandb",
         "numpy<2.0.0",
         "deepspeed==0.10.0",
+        "pydantic==1.10.13"
     )
     .env({
         "PORT": MASTER_PORT,
@@ -50,10 +52,22 @@ image = (
     .add_local_file("run_continued_pretraining.sh", "/root/run_continued_pretraining.sh")
 
 )
+volumes = {
+    "/mnt/lomo": Volume.from_name(name="further_training_outputs", create_if_missing=True)
+}
+
+secrets = [
+    Secret.from_name("huggingface-token")
+]
+
 
 app = App("notebook-images")
 
-@app.function(image=image)
+@app.function(image=image, 
+              volumes=volumes, 
+              secrets=[Secret.from_name("huggingface-token")], 
+              gpu=f"A10:{NUM_GPUS}", 
+              timeout=3600*12)
 def notebook_image():
     pass
 # volumes = {

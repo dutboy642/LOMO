@@ -1,20 +1,25 @@
 # Configuration for Continued Pretraining with LOMO
 
 # Model
-model_name_or_path: 'huggyllama/llama-7b'  # Base model to continue training
+model_name_or_path: 'meta-llama/Meta-Llama-3-8B'  # Base model to continue training
+cache_dir: '/mnt/lomo'
 
-# Data
-dataset_name: 'wikipedia_ja_100_samples'  # Dataset name (run: python src/dataset_manager.py --list to see available)
+# Dataset configuration (NEW: Configure dataset via YAML)
+dataset_name: 'wikipedia_ja_100_samples'  # Dataset name for logging/tracking
+dataset_path: 'data/wikipedia_ja_100_samples.json'  # Path to dataset file or HF repo (e.g., 'username/repo-name')
+text_column: 'text'  # Column name containing text data
+sample_size: 100  # Number of samples to use (-1 for all data)
+
+# Data processing
 refresh: false  # Set to true to reprocess data (set to false after first run)
 data_tag: 'continued_pretraining'
 train_on_inputs: true  # For continued pretraining, always true (train on entire text)
 data_max_length: 2048  # Sequence length - adjust based on your GPU memory
-data_dir: 'data'  # Directory where your data files are stored
-sample_size: 10000  # Number of samples to use (-1 for all data, set to smaller number for testing)
+data_dir: 'data'  # Directory where processed data will be stored
 
 # Training
 tag: 'lomo_continued_pretraining'
-output_dir: 'outputs'
+output_dir: '/mnt/lomo/outputs'
 overwrite_output_dir: true
 deepspeed: 'config/ds_config.json'
 do_train: true

@@ -3,9 +3,15 @@ import copy
 import random
 from tqdm import tqdm
 from typing import Callable, Any
+import json
 
-from datasets import load_dataset
-from dataclasses import dataclass
+try:
+    from huggingface_hub import hf_hub_download, snapshot_download
+    HAS_HF_HUB = True
+except ImportError:
+    HAS_HF_HUB = False
+    print("Warning: huggingface_hub not available, using local files only")
+
 import numpy as np
 import torch
 from torch.utils.data import Dataset
@@ -16,35 +22,21 @@ IGNORE_INDEX = -100
 REPRODUCIBILITY_SEED = 0
 
 
-@dataclass
-class DatasetInfo:
-    path: str
-    name: str = None
-    exemplar_split: str = 'train'
-    eval_split: str = 'validation'
-    test_split: str = 'test'
-    sample_size: int = -1
-    text_column: str = 'text'  # Column name containing the text data
-
-
 class ContinuedPretrainingDataset(Dataset):
     """Dataset for continued pretraining on raw text data"""
     
-    def __init__(self, data_args, tokenizer, dataset_info, split):
+    def __init__(self, data_args, tokenizer, split):
         super().__init__()
         self.data_args = data_args
         self.tokenizer = tokenizer
         self.split = split
         
-        # Use sample_size from data_args if specified, otherwise use dataset_info
-        if hasattr(data_args, 'sample_size') and data_args.sample_size != -1:
-            self.sample_size = data_args.sample_size
-            print(f"🎯 Using sample_size from config: {self.sample_size}")
-        else:
-            self.sample_size = dataset_info.sample_size
-            print(f"📊 Using default sample_size: {self.sample_size}")
-            
-        self.text_column = dataset_info.text_column
+        # Get config from data_args
+        self.dataset_path = data_args.dataset_path
+        self.text_column = data_args.text_column
+        self.sample_size = data_args.sample_size
+        
+        print(f"📊 Dataset config: path={self.dataset_path}, text_column={self.text_column}, sample_size={self.sample_size}")
 
         save_dir = os.path.join(data_args.data_dir, data_args.dataset_name, data_args.data_tag)
         if not os.path.exists(save_dir):
@@ -52,20 +44,7 @@ class ContinuedPretrainingDataset(Dataset):
 
         save_file = os.path.join(save_dir, f'{split}.pt')
         if data_args.refresh or not os.path.exists(save_file):
-            if dataset_info.path.endswith('.jsonl') or dataset_info.path.endswith('.json'):
-                # Load from local JSON/JSONL file
-                full_dataset = load_dataset('json', data_files=dataset_info.path, split='train')
-                dataset = self._split_local_dataset(full_dataset, split)
-            elif dataset_info.path.endswith('.txt'):
-                # Load from text file
-                with open(dataset_info.path, 'r', encoding='utf-8') as f:
-                    texts = f.read().strip().split('\n\n')  # Split by double newline
-                full_dataset = [{'text': text.strip()} for text in texts if text.strip()]
-                dataset = self._split_local_dataset(full_dataset, split)
-            else:
-                # Load from HuggingFace datasets
-                dataset = load_dataset(dataset_info.path, name=dataset_info.name, split=split)
-            
+            dataset = self._load_dataset_from_path(self.dataset_path, split)
             self.data = self.process_continued_pretraining(dataset, save_file)
         else:
             print('Loading data from', save_file)
@@ -75,6 +54,79 @@ class ContinuedPretrainingDataset(Dataset):
         print('Data format:', self.data[0].keys() if self.data else "Empty dataset")
         if self.data:
             print('Max length:', max([len(d['input_ids']) for d in self.data]))
+
+    def _load_dataset_from_path(self, dataset_path, split):
+        """Load dataset from various sources using huggingface_hub or local files"""
+        
+        if os.path.isfile(dataset_path):
+            # Local file
+            print(f"📁 Loading local file: {dataset_path}")
+            full_dataset = self._load_local_file(dataset_path)
+            return self._split_local_dataset(full_dataset, split)
+        
+        elif '/' in dataset_path and not dataset_path.startswith('/'):
+            # HuggingFace repository
+            print(f"🤗 Loading from HuggingFace: {dataset_path}")
+            if HAS_HF_HUB:
+                full_dataset = self._load_huggingface_dataset(dataset_path)
+                return self._split_local_dataset(full_dataset, split)
+            else:
+                raise ImportError("huggingface_hub is required for loading HuggingFace datasets")
+        
+        else:
+            raise ValueError(f"Invalid dataset path: {dataset_path}")
+    
+    def _load_local_file(self, file_path):
+        """Load data from local file"""
+        if file_path.endswith('.json'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                if isinstance(data, list):
+                    return data
+                else:
+                    return [data]
+        
+        elif file_path.endswith('.jsonl'):
+            data = []
+            with open(file_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        data.append(json.loads(line.strip()))
+            return data
+        
+        elif file_path.endswith('.txt'):
+            with open(file_path, 'r', encoding='utf-8') as f:
+                texts = f.read().strip().split('\n\n')  # Split by double newline
+            return [{self.text_column: text.strip()} for text in texts if text.strip()]
+        
+        else:
+            raise ValueError(f"Unsupported file format: {file_path}")
+    
+    def _load_huggingface_dataset(self, repo_id):
+        """Load dataset from HuggingFace using huggingface_hub"""
+        try:
+            # Try to download the repository
+            repo_path = snapshot_download(repo_id, repo_type="dataset")
+            
+            # Look for common dataset files
+            for filename in ['train.json', 'data.json', 'dataset.json']:
+                file_path = os.path.join(repo_path, filename)
+                if os.path.exists(file_path):
+                    print(f"📄 Found dataset file: {filename}")
+                    return self._load_local_file(file_path)
+            
+            # Look for jsonl files
+            for filename in ['train.jsonl', 'data.jsonl', 'dataset.jsonl']:
+                file_path = os.path.join(repo_path, filename)
+                if os.path.exists(file_path):
+                    print(f"📄 Found dataset file: {filename}")
+                    return self._load_local_file(file_path)
+            
+            raise FileNotFoundError(f"No suitable dataset file found in {repo_id}")
+        
+        except Exception as e:
+            print(f"❌ Error loading from HuggingFace: {e}")
+            raise
 
     def _split_local_dataset(self, full_dataset, split, train_ratio=0.8, val_ratio=0.1, test_ratio=0.1):
         """Chia local dataset thành train/validation/test splits"""
@@ -185,77 +237,7 @@ class ContinuedPretrainingDataset(Dataset):
         return self.data[i]
 
 
-def get_continued_pretraining_dataset_info(dataset_name):
-    """Get dataset configuration for continued pretraining"""
-    
-    if dataset_name == 'custom_text':
-        return DatasetInfo(
-            path="data/custom_text.txt",  # Path to your text file
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=-1,
-            text_column='text'
-        )
-    elif dataset_name == 'custom_jsonl':
-        return DatasetInfo(
-            path="data/custom_data.jsonl",  # Path to your JSONL file
-            exemplar_split="train", 
-            eval_split="validation",
-            sample_size=-1,
-            text_column='content'  # Column name in your JSONL
-        )
-    elif dataset_name == 'vietnamese_corpus':
-        return DatasetInfo(
-            path="data/vietnamese_corpus.txt",
-            exemplar_split="train",
-            eval_split="validation", 
-            sample_size=-1,
-            text_column='text'
-        )
-    elif dataset_name == 'wikipedia_ja':
-        return DatasetInfo(
-            path="data/wikipedia_ja.json",
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=10000,
-            text_column='text'
-        )
-    elif dataset_name == 'wikipedia_ja_100_samples':
-        return DatasetInfo(
-            path="data/wikipedia_ja_100_samples.json",
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=100,
-            text_column='text'
-        )
-    elif dataset_name == 'wikipedia_vi':
-        return DatasetInfo(
-            path="data/wikipedia_vi.json",
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=-1,
-            text_column='text'
-        )
-    elif dataset_name == 'wikipedia_en':
-        return DatasetInfo(
-            path="data/wikipedia_en.json",
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=-1,
-            text_column='text'
-        )
-    elif dataset_name == 'wikitext':
-        return DatasetInfo(
-            path="wikitext",
-            name="wikitext-103-raw-v1",
-            exemplar_split="train",
-            eval_split="validation",
-            sample_size=-1,
-            text_column='text'
-        )
-    else:
-        raise NotImplementedError(f"Dataset {dataset_name} not implemented")
-
+# Dataset configuration is now handled via YAML - no hardcoding needed!
 
 if __name__ == '__main__':
     from transformers import HfArgumentParser, AutoTokenizer
@@ -264,13 +246,15 @@ if __name__ == '__main__':
     parser = HfArgumentParser((ModelArguments, DataArguments))
     model_args, data_args = parser.parse_args_into_dataclasses()
     
-    # Example usage
+    # Example usage - configure via args instead of hardcoded dataset_info
     model_args.model_name_or_path = 'huggyllama/llama-7b'
-    data_args.dataset_name = 'custom_text'
+    data_args.dataset_path = 'data/wikipedia_ja_100_samples.json'
+    data_args.text_column = 'text'
+    data_args.sample_size = 100
     data_args.refresh = True
     data_args.data_tag = 'continued_pretraining'
     data_args.data_max_length = 1024
-    data_args.train_on_inputs = True  # For continued pretraining, usually True
+    data_args.train_on_inputs = True
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
@@ -279,5 +263,4 @@ if __name__ == '__main__':
     )
     tokenizer.pad_token_id = 0
 
-    dataset_info = get_continued_pretraining_dataset_info(data_args.dataset_name)
-    train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, dataset_info, split='train')
+    train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='train')

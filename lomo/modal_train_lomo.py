@@ -53,11 +53,12 @@ image = (
 )
 
 volumes = {
-    "/mnt/lomo": Volume.from_name(name="LOMO", create_if_missing=True)
+    "/mnt/lomo": Volume.from_name(name="further_training_outputs", create_if_missing=True)
 }
 
 secrets = [
-    Secret.from_name("huggingface-token")
+    Secret.from_name("huggingface-token"),
+    Secret.from_name("wandb-secret"),
 ]
 
 
@@ -75,3 +76,4 @@ def main():
         "bash "
         "run_continued_pretraining.sh"
     )
+

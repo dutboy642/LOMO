@@ -97,6 +97,27 @@ class DataCollatorForCauselLM:
         }
         return features
 
+@dataclass
+class DataCollatorForCausalLM:
+    def __init__(self, tokenizer, pad_to_multiple_of=None):
+        self.tokenizer = tokenizer
+        self.pad_to_multiple_of = pad_to_multiple_of
+
+    def __call__(self, features):
+        batch = self.tokenizer.pad(
+            features,
+            padding=True,
+            pad_to_multiple_of=self.pad_to_multiple_of,
+            return_tensors="pt",
+        )
+
+        # Causal LM: labels = input_ids
+        batch["labels"] = batch["input_ids"].clone()
+        batch["labels"][batch["attention_mask"] == 0] = -100
+
+        return batch
+
+
 
 @dataclass
 class EvalDataCollatorForCauselLM:
@@ -370,9 +391,18 @@ class DynamicLossScaler:
 
 
 def get_loss(logits, labels, clip_loss_value=None):
+    # Debug shapes
+    print(f"DEBUG - Input shapes:")
+    print(f"  logits: {logits.shape}")  # Expected: [batch_size, seq_len, vocab_size]
+    print(f"  labels: {labels.shape}")  # Expected: [batch_size, seq_len]
+   
     # Shift so that tokens < n predict n
     shift_logits = logits[..., :-1, :].contiguous()
     shift_labels = labels[:, 1:].contiguous()
+        
+    print(f"  shift_logits: {shift_logits.shape}")
+    print(f"  shift_labels: {shift_labels.shape}")
+    
     # Flatten the tokens
     if clip_loss_value is not None:
         loss_fct = CrossEntropyLoss(reduction='none')

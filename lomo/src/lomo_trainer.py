@@ -138,14 +138,28 @@ class LOMOTrainer:
                             self.model.optimizer.get_param_coordinator(training=True).reset_step()
                             tqb.set_postfix({'loss': loss.item()})
                             if self.allow_print:
-                                self.wandb.log(
-                                    {
-                                        'train/loss': loss.item(),
-                                        'train/learning_rate': self.lr,
-                                        'train/global_step': self.global_step,
-                                    },
-                                    step=self.global_step
-                                )
+                                # Tính GPU memory với đơn vị GBs
+                                log_dict = {
+                                    'train/loss': loss.item(),
+                                    'train/learning_rate': self.lr,
+                                    'train/global_step': self.global_step,
+                                }
+                                
+                                # Thêm GPU memory metrics nếu CUDA available
+                                if torch.cuda.is_available():
+                                    mem_allocated_gb = torch.cuda.memory_allocated() / (1024 ** 3)
+                                    mem_reserved_gb = torch.cuda.memory_reserved() / (1024 ** 3)
+                                    max_mem_allocated_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+                                    max_mem_reserved_gb = torch.cuda.max_memory_reserved() / (1024 ** 3)
+                                    
+                                    log_dict.update({
+                                        'memory/allocated_gb': round(mem_allocated_gb, 2),
+                                        'memory/reserved_gb': round(mem_reserved_gb, 2),
+                                        'memory/max_allocated_gb': round(max_mem_allocated_gb, 2),
+                                        'memory/max_reserved_gb': round(max_mem_reserved_gb, 2)
+                                    })
+                                
+                                self.wandb.log(log_dict, step=self.global_step)
                             continue
 
                         # with torch.no_grad():
@@ -181,14 +195,28 @@ class LOMOTrainer:
 
                     tqb.set_postfix({'loss': loss.item()})
                     if self.allow_print:
-                        self.wandb.log(
-                            {
-                                'train/loss': loss.item(),
-                                'train/learning_rate': self.lr,
-                                'train/global_step': self.global_step,
-                            },
-                            step=self.global_step
-                        )
+                        # Tính GPU memory với đơn vị GBs
+                        log_dict = {
+                            'train/loss': loss.item(),
+                            'train/learning_rate': self.lr,
+                            'train/global_step': self.global_step,
+                        }
+                        
+                        # Thêm GPU memory metrics nếu CUDA available
+                        if torch.cuda.is_available():
+                            mem_allocated_gb = torch.cuda.memory_allocated() / (1024 ** 3)
+                            mem_reserved_gb = torch.cuda.memory_reserved() / (1024 ** 3)
+                            max_mem_allocated_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+                            max_mem_reserved_gb = torch.cuda.max_memory_reserved() / (1024 ** 3)
+                            
+                            log_dict.update({
+                                'memory/allocated_gb': round(mem_allocated_gb, 2),
+                                'memory/reserved_gb': round(mem_reserved_gb, 2),
+                                'memory/max_allocated_gb': round(max_mem_allocated_gb, 2),
+                                'memory/max_reserved_gb': round(max_mem_reserved_gb, 2)
+                            })
+                        
+                        self.wandb.log(log_dict, step=self.global_step)
 
                     if self.training_args.save_strategy == 'steps' and self.global_step % self.training_args.save_steps == 0:
                         self.save_model(self.global_step)
@@ -254,6 +282,21 @@ class LOMOTrainer:
 
             if self.allow_print:
                 print(f'epoch: {epoch}, step: {step}, {self.training_args.metric_for_best_model}: {result_value}')
+                
+                # Thêm GPU memory metrics vào result
+                if torch.cuda.is_available():
+                    mem_allocated_gb = torch.cuda.memory_allocated() / (1024 ** 3)
+                    mem_reserved_gb = torch.cuda.memory_reserved() / (1024 ** 3)
+                    max_mem_allocated_gb = torch.cuda.max_memory_allocated() / (1024 ** 3)
+                    max_mem_reserved_gb = torch.cuda.max_memory_reserved() / (1024 ** 3)
+                    
+                    result.update({
+                        'memory/allocated_gb': round(mem_allocated_gb, 2),
+                        'memory/reserved_gb': round(mem_reserved_gb, 2),
+                        'memory/max_allocated_gb': round(max_mem_allocated_gb, 2),
+                        'memory/max_reserved_gb': round(max_mem_reserved_gb, 2)
+                    })
+                
                 self.wandb.log(result, step=step)
 
                 if self.is_better(result, prefix_metric_for_best_model):
@@ -272,6 +315,11 @@ class LOMOTrainer:
         shift_labels = batch['labels'][..., 1:].cuda().contiguous()
         # Flatten the tokens
         loss_fct = CrossEntropyLoss(reduction='none')
+        print("logits:", outs.logits.shape)
+        print("labels:", batch["labels"].shape)
+        print("shift_logits:", shift_logits.shape)
+        print("shift_labels:", shift_labels.shape)
+
         loss = loss_fct(shift_logits.view(shift_labels.shape[0] * shift_labels.shape[1], -1),
                         shift_labels.view(-1)).view_as(shift_labels)
         loss = loss.mean(dim=1)

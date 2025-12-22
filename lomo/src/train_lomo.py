@@ -62,16 +62,32 @@ def train():
     # assert training_args.clip_grad_value is None or training_args.clip_loss_value is None
     training_args.output_dir = os.path.join('outputs', tag_name, hparam_name)
 
-    if training_args.tag == 'debug':
+    # Set WANDB mode to avoid interactive prompts
+    if training_args.wandb_mode == 'disabled':
+        os.environ['WANDB_MODE'] = 'disabled'
+    elif training_args.wandb_mode == 'offline':
         os.environ['WANDB_MODE'] = 'offline'
-    if training_args.local_rank in [-1, 0]:
+    elif training_args.tag == 'debug':
+        os.environ['WANDB_MODE'] = 'offline'
+    else:
+        os.environ['WANDB_MODE'] = 'online'
+    
+    # Set WANDB_SILENT to avoid login prompts
+    os.environ['WANDB_SILENT'] = 'true'
+    
+    if training_args.local_rank in [-1, 0] and training_args.wandb_mode != 'disabled':
         wandb_config = copy.deepcopy(asdict(training_args))
         wandb_config.update(asdict(model_args))
         wandb_config.update(asdict(data_args))
+        
+        run_name = training_args.wandb_run_name
+        if run_name is None:
+            run_name = tag_name if hparam_name == 'output' else '_'.join([tag_name, hparam_name.replace('output_', '')])
+        
         wandb.init(
-            project="collie",
-            entity='collie_exp',
-            name=tag_name if hparam_name == 'output' else '_'.join([tag_name, hparam_name.replace('output_', '')]),
+            project=training_args.wandb_project,
+            entity=training_args.wandb_entity,
+            name=run_name,
             config=wandb_config
         )
 

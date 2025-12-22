@@ -25,13 +25,13 @@ image = (
         # "deepspeed",
         "rich>=13.3.5",
         "accelerate>=0.20.3",
-        "datasets==2.6.1",
+        # "datasets",
         "huggingface_hub",
         "peft",
-        "wandb",
+        # "wandb",
         "numpy<2.0.0",
         "deepspeed==0.10.0",
-        "pydantic==1.10.13"
+        # "pydantic==1.10.24"
     )
     .env({
         "PORT": MASTER_PORT,
@@ -66,10 +66,14 @@ app = App("notebook-images")
 @app.function(image=image, 
               volumes=volumes, 
               secrets=[Secret.from_name("huggingface-token")], 
-              gpu=f"A10:{NUM_GPUS}", 
+              gpu=f"A100-40GB:{NUM_GPUS}", 
               timeout=3600*12)
 def notebook_image():
-    pass
+    # pass
+    import os
+    os.system(
+        "pip show pydantic"
+    )
 # volumes = {
 #     "/mnt/lomo": Volume.from_name(name="LOMO", create_if_missing=True)
 # }

@@ -35,5 +35,5 @@ def sample_json_file(
 sample_json_file(
     "/home/thanhnguyen/code/Build_LLM/LOMO/lomo/data/wikipedia_ja.json",
     "/home/thanhnguyen/code/Build_LLM/LOMO/lomo/data",
-    num_samples=100
+    num_samples=10000
 )

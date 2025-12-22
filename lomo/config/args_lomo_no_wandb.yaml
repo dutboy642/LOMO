@@ -34,11 +34,11 @@ remove_unused_columns: false
 load_best_model_at_end: false
 metric_for_best_model: 'acc'
 group_by_length: false
-# wandb configuration
-wandb_mode: 'online'  # Options: 'online', 'offline', 'disabled'
-wandb_project: 'lomo-training'
-wandb_entity: 'your-wandb-entity'  # Change this to your wandb entity/username
-# wandb_run_name: null  # Optional: custom run name, auto-generated if null
+
+# wandb configuration - DISABLED to avoid interactive prompts
+wandb_mode: 'disabled'  # Options: 'online', 'offline', 'disabled'
+# wandb_project: 'lomo-training'  # Not needed when disabled
+# wandb_entity: 'your-wandb-entity'  # Not needed when disabled
 
 # report_to: 'wandb'
 dataloader_pin_memory: false

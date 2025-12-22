@@ -8,6 +8,7 @@ class ModelArguments:
     model_name_or_path: Optional[str] = field(default="llama-7B")
     cache_dir: Optional[str] = field(default='../llama/checkpoint')
     # llama_dir: Optional[str] = field(default='/remote-home/klv/exps/MossOn3090/llama')
+    local_file: Optional[bool] = field(default=False)
 
 
 @dataclass
@@ -30,6 +31,12 @@ class DataArguments:
 @dataclass
 class MyTrainingArguments(Seq2SeqTrainingArguments):
     tag: str = field(default=None, metadata={"help": "Tag for the experiment."})
+
+    # Wandb configuration
+    wandb_mode: str = field(default='offline', metadata={"help": "Wandb mode: online, offline, or disabled"})
+    wandb_project: str = field(default='lomo', metadata={"help": "Wandb project name"})
+    wandb_entity: str = field(default='lomo_exp', metadata={"help": "Wandb entity name"})
+    wandb_run_name: str = field(default=None, metadata={"help": "Wandb run name. If None, auto-generated"})
 
     predict_with_generate: bool = field(default=False, metadata={"help": "Whether to use generate for prediction."})
 

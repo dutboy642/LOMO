@@ -170,66 +170,118 @@ class ContinuedPretrainingDataset(Dataset):
         else:
             raise ValueError(f"Unknown split: {split}")
 
-    def process_continued_pretraining(self, dataset, save_file):
-        """Process raw text data for continued pretraining"""
-        data = []
+    # def process_continued_pretraining(self, dataset, save_file):
+    #     """Process raw text data for continued pretraining"""
+    #     data = []
         
-        # Sample dataset early if sample_size is specified
+    #     # Sample dataset early if sample_size is specified
+    #     if self.sample_size > 0 and len(dataset) > self.sample_size:
+    #         print(f'🎯 Sampling {self.sample_size} examples from {len(dataset)} total examples')
+    #         random.seed(REPRODUCIBILITY_SEED)
+    #         # Convert to list if it's not already, then sample
+    #         if hasattr(dataset, 'select'):
+    #             # For HuggingFace datasets
+    #             indices = random.sample(range(len(dataset)), self.sample_size)
+    #             dataset = dataset.select(indices)
+    #         else:
+    #             # For list datasets
+    #             dataset = random.sample(list(dataset), self.sample_size)
+    #         print(f'✅ Sampled dataset size: {len(dataset)}')
+    #     else:
+    #         print(f'📊 Processing full dataset with {len(dataset)} examples')
+        
+    #     for instance in tqdm(dataset, desc="Processing dataset"):
+    #         if isinstance(instance, dict):
+    #             text = instance[self.text_column]
+    #         else:
+    #             text = instance  # If it's already a string
+            
+    #         if not text or len(text.strip()) == 0:
+    #             continue
+    #             # DEBUG: Check what we're returning
+    #         print(f"  text_column: {self.text_column}")
+    #         print(f"  example[text_column] type: {type(instance[self.text_column])}")
+    #         print(f"  example[text_column][:100]: {instance[self.text_column][:100]}")
+            
+    #         # Tokenize the entire text
+    #         tokenized = self.tokenizer.encode(
+    #             text.strip(), 
+    #             truncation=True, 
+    #             max_length=self.data_args.data_max_length
+    #         )
+    #         # print(f"  tokenized keys: {tokenized.keys()}")
+    #         # print(f"  input_ids type: {type(tokenized['input_ids'])}")
+    #         # print(f"  input_ids length: {len(tokenized['input_ids'])}")
+    #         # print(f"  input_ids[:10]: {tokenized['input_ids'][:10]}")
+        
+    #         # Add EOS token
+    #         if tokenized[-1] != self.tokenizer.eos_token_id:
+    #             tokenized = tokenized + [self.tokenizer.eos_token_id]
+            
+    #         # For continued pretraining, input_ids and labels are the same
+    #         # The model learns to predict the next token for the entire sequence
+    #         input_ids = tokenized
+    #         labels = copy.deepcopy(input_ids)
+            
+    #         # Optionally mask the first token (since there's no previous context)
+    #         if not self.data_args.train_on_inputs and len(labels) > 1:
+    #             labels[0] = IGNORE_INDEX
+            
+    #         data.append({
+    #             'input_ids': input_ids,
+    #             'labels': labels,
+    #             'text': text.strip()
+    #         })
+
+    #     print(f'✅ Processed {len(data)} examples successfully')
+    #     torch.save(data, save_file)
+    #     print('Saving data to', save_file)
+    #     return data
+
+
+    def process_continued_pretraining(self, dataset, save_file):
+        data = []
+
         if self.sample_size > 0 and len(dataset) > self.sample_size:
-            print(f'🎯 Sampling {self.sample_size} examples from {len(dataset)} total examples')
             random.seed(REPRODUCIBILITY_SEED)
-            # Convert to list if it's not already, then sample
-            if hasattr(dataset, 'select'):
-                # For HuggingFace datasets
+            if hasattr(dataset, "select"):
                 indices = random.sample(range(len(dataset)), self.sample_size)
                 dataset = dataset.select(indices)
             else:
-                # For list datasets
                 dataset = random.sample(list(dataset), self.sample_size)
-            print(f'✅ Sampled dataset size: {len(dataset)}')
-        else:
-            print(f'📊 Processing full dataset with {len(dataset)} examples')
-        
+
         for instance in tqdm(dataset, desc="Processing dataset"):
             if isinstance(instance, dict):
                 text = instance[self.text_column]
             else:
-                text = instance  # If it's already a string
-            
+                text = instance
+
             if not text or len(text.strip()) == 0:
                 continue
-                
-            # Tokenize the entire text
-            tokenized = self.tokenizer.encode(
-                text.strip(), 
-                truncation=True, 
-                max_length=self.data_args.data_max_length
+
+            # ⚠️ DÙNG tokenizer(), KHÔNG DÙNG encode()
+            tokenized = self.tokenizer(
+                text.strip(),
+                truncation=True,
+                max_length=self.data_args.data_max_length,
+                padding=False,          # để collator pad
+                return_attention_mask=False
             )
-            
-            # Add EOS token
-            if tokenized[-1] != self.tokenizer.eos_token_id:
-                tokenized = tokenized + [self.tokenizer.eos_token_id]
-            
-            # For continued pretraining, input_ids and labels are the same
-            # The model learns to predict the next token for the entire sequence
-            input_ids = tokenized
-            labels = copy.deepcopy(input_ids)
-            
-            # Optionally mask the first token (since there's no previous context)
-            if not self.data_args.train_on_inputs and len(labels) > 1:
-                labels[0] = IGNORE_INDEX
-            
+
+            input_ids = tokenized["input_ids"]
+
+            # Add EOS nếu cần
+            if input_ids[-1] != self.tokenizer.eos_token_id:
+                input_ids = input_ids + [self.tokenizer.eos_token_id]
+
             data.append({
-                'input_ids': input_ids,
-                'labels': labels,
-                'text': text.strip()
+                "input_ids": input_ids
             })
 
-        print(f'✅ Processed {len(data)} examples successfully')
         torch.save(data, save_file)
-        print('Saving data to', save_file)
+        print(f"✅ Saved {len(data)} examples to {save_file}")
         return data
-
+    
     def __len__(self):
         return len(self.data)
 
@@ -239,28 +291,28 @@ class ContinuedPretrainingDataset(Dataset):
 
 # Dataset configuration is now handled via YAML - no hardcoding needed!
 
-if __name__ == '__main__':
-    from transformers import HfArgumentParser, AutoTokenizer
-    from arguments import ModelArguments, DataArguments
+# if __name__ == '__main__':
+#     from transformers import HfArgumentParser, AutoTokenizer
+#     from arguments import ModelArguments, DataArguments
 
-    parser = HfArgumentParser((ModelArguments, DataArguments))
-    model_args, data_args = parser.parse_args_into_dataclasses()
+#     parser = HfArgumentParser((ModelArguments, DataArguments))
+#     model_args, data_args = parser.parse_args_into_dataclasses()
     
-    # Example usage - configure via args instead of hardcoded dataset_info
-    model_args.model_name_or_path = 'huggyllama/llama-7b'
-    data_args.dataset_path = 'data/wikipedia_ja_100_samples.json'
-    data_args.text_column = 'text'
-    data_args.sample_size = 100
-    data_args.refresh = True
-    data_args.data_tag = 'continued_pretraining'
-    data_args.data_max_length = 1024
-    data_args.train_on_inputs = True
+#     # Example usage - configure via args instead of hardcoded dataset_info
+#     model_args.model_name_or_path = 'huggyllama/llama-7b'
+#     data_args.dataset_path = 'data/wikipedia_ja_100_samples.json'
+#     data_args.text_column = 'text'
+#     data_args.sample_size = 100
+#     data_args.refresh = True
+#     data_args.data_tag = 'continued_pretraining'
+#     data_args.data_max_length = 1024
+#     data_args.train_on_inputs = True
 
-    tokenizer = AutoTokenizer.from_pretrained(
-        model_args.model_name_or_path,
-        use_fast=False,
-        padding_side='left'
-    )
-    tokenizer.pad_token_id = 0
+#     tokenizer = AutoTokenizer.from_pretrained(
+#         model_args.model_name_or_path,
+#         use_fast=False,
+#         padding_side='left'
+#     )
+#     tokenizer.pad_token_id = 0
 
-    train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='train')
+#     train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='train')

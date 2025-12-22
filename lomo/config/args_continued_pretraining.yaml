@@ -3,6 +3,7 @@
 # Model
 model_name_or_path: 'meta-llama/Meta-Llama-3-8B'  # Base model to continue training
 cache_dir: '/mnt/lomo'
+local_file: false
 
 # Dataset configuration (NEW: Configure dataset via YAML)
 dataset_name: 'wikipedia_ja_100_samples'  # Dataset name for logging/tracking
@@ -13,8 +14,8 @@ sample_size: 100  # Number of samples to use (-1 for all data)
 # Data processing
 refresh: false  # Set to true to reprocess data (set to false after first run)
 data_tag: 'continued_pretraining'
-train_on_inputs: true  # For continued pretraining, always true (train on entire text)
-data_max_length: 2048  # Sequence length - adjust based on your GPU memory
+train_on_inputs: false  # For continued pretraining, always true (train on entire text)
+data_max_length: 1024  # Sequence length - adjust based on your GPU memory
 data_dir: 'data'  # Directory where processed data will be stored
 
 # Training
@@ -23,14 +24,14 @@ output_dir: '/mnt/lomo/outputs'
 overwrite_output_dir: true
 deepspeed: 'config/ds_config.json'
 do_train: true
-do_eval: true
-evaluation_strategy: 'steps'  # Changed to 'steps' for more frequent eval
-eval_steps: 500  # Evaluate every 500 steps
+do_eval: false # set false as eval is not common in continued pretraining
+# evaluation_strategy: 'steps'  # Changed to 'steps' for more frequent eval
+# eval_steps: 500  # Evaluate every 500 steps
 logging_steps: 100  # Log every 100 steps
 
 # Batch size settings (adjust based on your GPU memory)
-per_device_train_batch_size: 4  # Smaller batch size for longer sequences
-per_device_eval_batch_size: 4
+per_device_train_batch_size: 2  # Smaller batch size for longer sequences
+per_device_eval_batch_size: 2
 gradient_accumulation_steps: 4  # Effective batch size = 4 * 4 = 16
 
 # Learning rate (continued pretraining typically uses lower lr than fine-tuning)
@@ -46,9 +47,15 @@ adam_epsilon: 1e-8
 # Gradient clipping
 clip_grad_norm: 1.0
 
+# Wandb configuration
+wandb_mode: 'online'  # Options: 'online', 'offline', 'disabled'
+wandb_project: 'lomo-continued-pretraining'
+wandb_entity: null  # Change this to your wandb entity/username
+# wandb_run_name: null  # Optional: custom run name, auto-generated if null
+
 # Checkpointing
-save_strategy: 'steps'
-save_steps: 1000  # Save checkpoint every 1000 steps
+save_strategy: 'epoch'
+# save_steps: 1000  # Save checkpoint every 1000 steps
 save_total_limit: 3  # Keep only 3 most recent checkpoints
 load_best_model_at_end: false  # Not applicable for continued pretraining
 
@@ -61,14 +68,15 @@ predict_with_generate: false
 group_by_length: true  # Group sequences by length for efficiency
 
 # Logging
-report_to: 'wandb'  # Use wandb for experiment tracking
+# DON'T set report_to - it's handled automatically
+# report_to: 'wandb'  # Use wandb for experiment tracking
 logging_dir: 'logs'
 logging_first_step: true
 
 # Mixed precision
 bf16: false  # Use fp16 instead of bf16 if your GPU doesn't support bf16
 fp16: true
-dataloader_num_workers: 4
+dataloader_num_workers: 0
 
 # Resume from checkpoint (uncomment to resume training)
 # resume_from_checkpoint: 'outputs/wikipedia_ja_llama-7b_lomo_continued_pretraining/continued_pretraining_lr1e-05_bs4_cosine_warmup100_clipnorm1.0/checkpoint-1000'

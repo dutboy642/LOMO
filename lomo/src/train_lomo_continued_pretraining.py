@@ -9,6 +9,7 @@ from transformers import set_seed
 from dataclasses import asdict
 from transformers.integrations.deepspeed import HfDeepSpeedConfig
 import wandb
+from transformers import DataCollatorForLanguageModeling
 
 python_path = os.path.dirname(os.path.dirname(os.path.realpath(__file__)))
 sys.path.append(python_path)
@@ -16,8 +17,10 @@ from log import print
 from arguments import ModelArguments, DataArguments, MyTrainingArguments
 from mydatasets_continued_pretraining import ContinuedPretrainingDataset
 from lomo_trainer import LOMOTrainer
-from utils import DataCollatorForCauselLM
+from utils import DataCollatorForCauselLM, DataCollatorForCausalLM
 
+from huggingface_hub import login
+login(os.environ["HUGGINGFACE_TOKEN"])
 
 def compute_metrics(all_pred, eval_dataset, eval_prefix=None):
     """Simple perplexity computation for continued pretraining evaluation"""
@@ -66,16 +69,36 @@ def train_continued_pretraining():
     # Ensure output directory exists
     os.makedirs(training_args.output_dir, exist_ok=True)
 
-    if training_args.tag == 'debug':
+    # Set WANDB mode to avoid interactive prompts
+    if training_args.wandb_mode == 'disabled':
+        os.environ['WANDB_MODE'] = 'disabled'
+    elif training_args.wandb_mode == 'offline':
         os.environ['WANDB_MODE'] = 'offline'
-    if training_args.local_rank in [-1, 0]:
+    elif training_args.tag == 'debug':
+        os.environ['WANDB_MODE'] = 'offline'
+    else:
+        os.environ['WANDB_MODE'] = 'online'
+    
+    # Set WANDB_SILENT to avoid login prompts
+    os.environ['WANDB_SILENT'] = 'true'
+    
+    if training_args.local_rank in [-1, 0] and training_args.wandb_mode != 'disabled':
         wandb_config = copy.deepcopy(asdict(training_args))
         wandb_config.update(asdict(model_args))
         wandb_config.update(asdict(data_args))
+        
+        run_name = training_args.wandb_run_name
+        if run_name is None:
+            run_name = tag_name if hparam_name == 'continued_pretraining' else '_'.join([tag_name, hparam_name.replace('continued_pretraining_', '')])
+        
+        # Login with API key if available
+        if 'WANDB_API_KEY' in os.environ and training_args.wandb_mode == 'online':
+            wandb.login(key=os.environ['WANDB_API_KEY'])
+       
         wandb.init(
-            project="lomo-continued-pretraining",
-            entity='lomo_exp',
-            name=tag_name if hparam_name == 'continued_pretraining' else '_'.join([tag_name, hparam_name.replace('continued_pretraining_', '')]),
+            project=training_args.wandb_project if hasattr(training_args, 'wandb_project') else "lomo-continued-pretraining",
+            entity=training_args.wandb_entity if hasattr(training_args, 'wandb_entity') else 'lomo_exp',
+            name=run_name,
             config=wandb_config
         )
 
@@ -90,14 +113,18 @@ def train_continued_pretraining():
     
     model = AutoModelForCausalLM.from_pretrained(
         model_args.model_name_or_path if training_args.resume_from_checkpoint is None else training_args.resume_from_checkpoint,
-        local_files_only=False,  # Allow downloading if not available locally
+        local_files_only=model_args.local_file,
         config=config,
+        cache_dir=model_args.cache_dir
+
     )
 
     tokenizer = AutoTokenizer.from_pretrained(
         model_args.model_name_or_path,
         use_fast=False,
-        padding_side='left'
+        padding_side='left',
+        cache_dir=model_args.cache_dir
+
     )
     if tokenizer.pad_token_id is None:
         tokenizer.pad_token_id = tokenizer.eos_token_id
@@ -109,6 +136,16 @@ def train_continued_pretraining():
     
     train_dataset = ContinuedPretrainingDataset(data_args, tokenizer, split='train')
     
+    # DEBUG: Check dataset format
+    print("🔍 DEBUG: Checking dataset format...")
+    sample = train_dataset[0]
+    print(f"Dataset sample keys: {sample.keys()}")
+    for key, value in sample.items():
+        print(f"  {key}: type={type(value)}, len={len(value) if hasattr(value, '__len__') else 'N/A'}")
+        if key == 'input_ids' and hasattr(value, '__getitem__'):
+            print(f"    First 5 values: {value[:5]}")
+    print("✅ Dataset format check completed")
+    
     eval_dataset = None
     if training_args.do_eval:
         try:
@@ -118,7 +155,14 @@ def train_continued_pretraining():
             eval_dataset = train_dataset
 
     # ========== 4. Initialize our Trainer. ==========
-    data_collator = DataCollatorForCauselLM(tokenizer, max_length=data_args.data_max_length, padding_side='left')
+    # data_collator = DataCollatorForCauselLM(tokenizer, max_length=data_args.data_max_length, padding_side='left')
+    # data_collator = DataCollatorForCausalLM(tokenizer)
+    
+    # Custom data collator to filter out text fields
+    data_collator = DataCollatorForLanguageModeling(
+        tokenizer=tokenizer,
+        mlm=False  # ⚠️ Causal LM
+    )
     
     trainer = LOMOTrainer(
         model=model,

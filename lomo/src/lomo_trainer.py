@@ -22,6 +22,7 @@ except:
 
 from src.utils import LearningRateScheduler, WandbLogger, DynamicLossScaler, get_loss
 from src.lomo import LOMO
+from src.adalomo import AdaLomo
 from log import print
 
 
@@ -92,7 +93,9 @@ class LOMOTrainer:
                                                   n_steps=self.n_steps)
         self.lr = 0
 
-        self.optimizer = LOMO(model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
+        # self.optimizer = LOMO(model, self.lr, training_args.clip_grad_norm, training_args.clip_grad_value)
+        self.optimizer = AdaLomo(model, self.lr, clip_grad_norm=training_args.clip_grad_norm,clip_grad_value= training_args.clip_grad_value)
+
         get_accelerator().empty_cache()
 
     def train(self):

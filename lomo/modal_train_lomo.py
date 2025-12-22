@@ -6,7 +6,7 @@ from modal import (
 )
 
 
-NUM_GPUS = 1
+NUM_GPUS = 2
 MASTER_PORT = "10000"
 CUDA_VISIBLE_DEVICES = f'localhost:{",".join([str(i) for i in list(range(NUM_GPUS))])}'
 
@@ -41,6 +41,7 @@ image = (
     .add_local_file("src/download_wiki_dataset.py", "/root/src/download_wiki_dataset.py")
     .add_local_file("src/mydatasets_continued_pretraining.py", "/root/src/mydatasets_continued_pretraining.py")
     .add_local_file("src/lomo.py", "/root/src/lomo.py")
+    .add_local_file("src/adalomo.py", "/root/src/adalomo.py")
     .add_local_file("src/lomo_trainer.py", "/root/src/lomo_trainer.py")
     .add_local_file("src/train_lomo_continued_pretraining.py", "/root/src/train_lomo_continued_pretraining.py")
     .add_local_file("src/prompts.py", "/root/src/prompts.py")

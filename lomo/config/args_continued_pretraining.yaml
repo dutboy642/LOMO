@@ -15,7 +15,7 @@ sample_size: 100  # Number of samples to use (-1 for all data)
 refresh: false  # Set to true to reprocess data (set to false after first run)
 data_tag: 'continued_pretraining'
 train_on_inputs: false  # For continued pretraining, always true (train on entire text)
-data_max_length: 1024  # Sequence length - adjust based on your GPU memory
+data_max_length: 512  # Sequence length - adjust based on your GPU memory
 data_dir: 'data'  # Directory where processed data will be stored
 
 # Training
@@ -30,9 +30,9 @@ do_eval: false # set false as eval is not common in continued pretraining
 logging_steps: 100  # Log every 100 steps
 
 # Batch size settings (adjust based on your GPU memory)
-per_device_train_batch_size: 2  # Smaller batch size for longer sequences
-per_device_eval_batch_size: 2
-gradient_accumulation_steps: 4  # Effective batch size = 4 * 4 = 16
+per_device_train_batch_size: 1  # Smaller batch size for longer sequences
+per_device_eval_batch_size: 1
+gradient_accumulation_steps: 8  # Effective batch size = 4 * 4 = 16
 
 # Learning rate (continued pretraining typically uses lower lr than fine-tuning)
 learning_rate: 1e-5  # Much lower than fine-tuning (usually 1e-5 to 5e-5)
